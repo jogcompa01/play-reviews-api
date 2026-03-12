@@ -9,14 +9,21 @@ module.exports = async (req, res) => {
   if (secret !== SECRET) return res.status(403).json({ error: "Unauthorized" });
   if (!appId)            return res.status(400).json({ error: "appId required" });
 
+  const countryCode = (country || "us").toLowerCase();
+  const langCode    = lang || "en";
+  const numReviews  = Math.min(parseInt(num) || 100, 200);
+
   try {
+    // Fetch dengan throttle disabled agar benar-benar pakai country yang diminta
     const result = await gplay.reviews({
-      appId:   appId,
-      lang:    lang    || "en",
-      country: country || "us",
-      sort:    gplay.sort.NEWEST,
-      num:     Math.min(parseInt(num) || 100, 200),
+      appId:    appId,
+      lang:     langCode,
+      country:  countryCode,
+      sort:     gplay.sort.NEWEST,
+      num:      numReviews,
+      throttle: 1,
     });
+
     const reviews = (result.data || []).map(r => ({
       reviewId:   r.id          || "",
       userName:   r.userName    || "",
@@ -30,9 +37,17 @@ module.exports = async (req, res) => {
       replyDate:  r.replyDate ? new Date(r.replyDate).toLocaleDateString("id-ID") : "",
       device:     "",
     }));
-    return res.status(200).json({ ok: true, appId, country: country||"us", lang: lang||"en", count: reviews.length, reviews });
+
+    console.log(`[${countryCode}] ${appId}: ${reviews.length} reviews`);
+    return res.status(200).json({
+      ok: true, appId,
+      country: countryCode,
+      lang: langCode,
+      count: reviews.length,
+      reviews
+    });
   } catch (err) {
-    console.error(err.message);
+    console.error(`[${countryCode}] ${appId}: ${err.message}`);
     return res.status(500).json({ error: err.message });
   }
 };
